@@ -4,5 +4,4 @@
 .ipynb_checkpoints
 /module1-logistic-regression/tracks.csv
 /module4-ridge-regression/blogData_train.csv
-/module4-ridge-regression/blogData_test-2012.03.16.00_00.csv
-/module4-ridge-regression/blogData_test-2012.03.29.01_00.csv
+/module4-ridge-regression/tests/*
