@@ -1,0 +1,403 @@
+{
+  "nbformat": 4,
+  "nbformat_minor": 0,
+  "metadata": {
+    "colab": {
+      "name": "Untitled30.ipynb",
+      "version": "0.3.2",
+      "provenance": [],
+      "include_colab_link": true
+    },
+    "kernelspec": {
+      "name": "python3",
+      "display_name": "Python 3"
+    }
+  },
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "id": "view-in-github",
+        "colab_type": "text"
+      },
+      "source": [
+        "<a href=\"https://colab.research.google.com/github/macscheffer/DS-Unit-2-Sprint-3-Advanced-Regression/blob/master/Ames_Housing_LRvsRidge\" target=\"_parent\"><img src=\"https://colab.research.google.com/assets/colab-badge.svg\" alt=\"Open In Colab\"/></a>"
+      ]
+    },
+    {
+      "metadata": {
+        "id": "Qh-XKC2E1-HC",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "cell_type": "code",
+      "source": [
+        "import pandas as pd\n",
+        "pd.set_option('display.max_rows', 500)\n",
+        "import numpy as np\n",
+        "import matplotlib.pyplot as plt\n",
+        "\n",
+        "df = pd.read_csv(\"https://raw.githubusercontent.com/ryanleeallred/datasets/master/Ames%20Housing%20Data/train.csv\")\n"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "metadata": {
+        "id": "i0nk7mX32BQz",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "cell_type": "code",
+      "source": [
+        "def engineer_me(df):\n",
+        "    \n",
+        "    # random\n",
+        "    df['fullhalfbath_interaction'] = df.FullBath * df.HalfBath\n",
+        "    df['floor_interaction'] = df['1stFlrSF'] * df['2ndFlrSF']\n",
+        "    df['lotarea_squared'] = df.LotArea ** 2\n",
+        "    df['overallqual_squared'] = df.OverallQual ** 2\n",
+        "    df['overallcond_squared'] = df.OverallCond ** 2\n",
+        "    df['sq_footage_fsb'] = df['1stFlrSF'] + df['2ndFlrSF'] + df.BsmtFinSF1\n",
+        "    df['sqfootage_fsb_squared'] = df.sq_footage_fsb ** 2\n",
+        "    df['fullbath_squared'] = df.FullBath ** 2\n",
+        "    df['grlivarea_squared'] = df.GrLivArea ** 2\n",
+        "    df['atypical_function'] = (df.Functional != 'Typ')\n",
+        "    df.LotFrontage = df.LotFrontage.fillna(70)\n",
+        "    df['lotfrontage_squared'] = df.LotFrontage ** 2\n",
+        "    df['OpenPorchSF_squared'] = df.OpenPorchSF ** 2\n",
+        "    df['WoodDeckSF_squared'] = df.WoodDeckSF ** 2\n",
+        "    df['EnclosedPorch_squared'] = df.EnclosedPorch ** 2\n",
+        "    df['ScreenPorch_squared'] = df.ScreenPorch ** 2\n",
+        "    df['TotRmsAbvGrd_squared'] = df.TotRmsAbvGrd ** 2\n",
+        "    df['LowQualFinSF_squared'] = df.LowQualFinSF ** 2\n",
+        "    df['LowQualFinSF_as_pct_fsb'] = df.LowQualFinSF / df.sq_footage_fsb\n",
+        "    df['ExterQual_numeric'] = df.ExterQual.map({'Po':0, 'Fa':1, 'TA':2, 'Gd':3, 'Ex':4})\n",
+        "    df['ExterQual_numeric_squared'] = df.ExterQual_numeric ** 2\n",
+        "    df['street_grvl'] = (df.Street == 'Grvl')\n",
+        "    df['LotConfig_Culdasac'] = (df.LotConfig == 'CullDSac')\n",
+        "    \n",
+        "    \n",
+        "    # dates\n",
+        "    df['sold_pre_2008'] = (df.YrSold < 2008)\n",
+        "    df['age_sold'] = df.YrSold - df.YearBuilt\n",
+        "    df['age_sold_squared'] = df.age_sold ** 2\n",
+        "    df['is_start_of_school'] = (df.MoSold == 9)\n",
+        "    df['is_spring'] = ((df.MoSold == 4) | (df.MoSold == 5))\n",
+        "    df['years_since_remod'] = df.YrSold - df.YearRemodAdd\n",
+        "    df['years_since_remod_squared'] = df.YrSold - df.YearRemodAdd\n",
+        "    df['age_remod_interaction'] = df.age_sold * df.years_since_remod\n",
+        "    df['age_remod_interaction_squared'] = df.age_sold_squared * df.years_since_remod_squared\n",
+        "    df['remodeled?'] = (df.YearBuilt != df.YearRemodAdd)\n",
+        "    df['age_remodeled_interaction_good'] = (df.age_sold * df['remodeled?']) \n",
+        "    df['overallcond_5over'] = (df.OverallCond >= 5)\n",
+        "    df['sq_footage_fsbg'] = df['sq_footage_fsb'] + df.GarageArea\n",
+        "    df['sq_footage_fsbg_squared'] = df.sq_footage_fsbg ** 2 \n",
+        "    \n",
+        "    \n",
+        "    # MSZoning - General Zoning classification of the sale\n",
+        "    df['mszoning_RL'] = (df.MSZoning == 'RL')\n",
+        "    df['mszoning_c'] = (df.MSZoning == 'C (all)')\n",
+        "    df['mszoning_RM'] = (df.MSZoning == 'RM')\n",
+        "    df['mszoning_FV'] = (df.MSZoning == 'FV')\n",
+        "    \n",
+        "    \n",
+        "    # Home Location \n",
+        "    df['good_area'] = ((df.Neighborhood == 'NoRidge') | (df.Neighborhood == 'NridgeHt') | (df.Neighborhood == 'StoneBr'))\n",
+        "    df['bad_area'] = ((df.Neighborhood == 'MeadowV') | (df.Neighborhood == 'IDOTRR') | (df.Neighborhood == 'BrDale'))\n",
+        "    \n",
+        "    \n",
+        "    # Home Type\n",
+        "    df['one_fam_home'] = (df.BldgType == '1Fam')\n",
+        "    df['townhouse'] = (df.BldgType == 'TwnhsE')\n",
+        "    df['onehalf_fin'] = (df.HouseStyle == '1.5Fin')\n",
+        "    df['onehalf_unfin'] = (df.HouseStyle == '1.5Unf')\n",
+        "\n",
+        "    \n",
+        "    # MiscFeature\n",
+        "    df['miscfeature_isnone'] = (df.MiscFeature == 'None')\n",
+        "    df['has_shed'] = (df.MiscFeature == 'Shed')\n",
+        "    df['has_pool'] = (df.PoolArea > 0)\n",
+        "    df['pool_exc'] = (df.PoolQC == 'Ex')\n",
+        "    \n",
+        "    # Need to add MiscFeature Values\n",
+        "    \n",
+        "    \n",
+        "    # SaleType & SaleCondition\n",
+        "    df['new_home'] = (df.SaleType == 'New')\n",
+        "    df['saletype_cod'] = (df.SaleType == 'COD')\n",
+        "    df['saletype_lowdn_lowint'] = ((df.SaleType == 'ConLD') | (df.SaleType == 'ConLw'))\n",
+        "    df['salecond_partial'] = (df.SaleCondition == 'Partial')\n",
+        "    df['salecond_abnorml'] = (df.SaleCondition == 'Abnorml')\n",
+        "    df['salecond_family'] = (df.SaleCondition == 'Family')\n",
+        "    \n",
+        "    # Garage\n",
+        "    df['attached_garage'] = (df.GarageType == 'Attchd')\n",
+        "    df['detchd_garage'] = (df.GarageType == 'Detchd')\n",
+        "    df['garage_cars_squared'] = df.GarageCars ** 2\n",
+        "    df['garagearea_squared'] = df.GarageArea ** 2\n",
+        "    df.GarageQual = df.GarageQual.fillna('missing')\n",
+        "    df['garageQual_numeric'] = df.GarageQual.map({'missing': 0, 'Po': 0, 'Fa': 1, 'TA': 2, 'Gd':3, 'Ex': 4})\n",
+        "    df['garageQual_numeric_squared'] = df.garageQual_numeric ** 2\n",
+        "    df['garage_unf'] = (df.GarageFinish == 'Unf')\n",
+        "    df['garage_Fin'] = (df.GarageFinish == 'Fin')\n",
+        "    df['Garage_Added'] = (df.GarageYrBlt != df.YearBuilt)\n",
+        "    \n",
+        "    \n",
+        "    # Heating & Air\n",
+        "    df['heating_gasa'] = (df.Heating == 'GasA')\n",
+        "    df['heating_qual_ex'] = (df.HeatingQC == 'Ex')\n",
+        "    df['heating_qual_pr'] = (df.HeatingQC == 'Po')\n",
+        "    df['heating_qual_fa'] = (df.HeatingQC == 'Fa') # maybe make heating quality numeric and square it?\n",
+        "    df['no_central_air'] = (df.CentralAir == 'N')\n",
+        "    \n",
+        "    \n",
+        "    # Basement\n",
+        "    df['bsmt_unfin_percent'] = df.BsmtUnfSF / df.TotalBsmtSF\n",
+        "    df.bsmt_unfin_percent = df.bsmt_unfin_percent.fillna(1)\n",
+        "    df['finished_bsmt'] = (df.bsmt_unfin_percent == 0)\n",
+        "    df.BsmtExposure = df.BsmtExposure.fillna('NoBsmt')\n",
+        "    df['BsmtExposure_numeric'] = df.BsmtExposure.map({'NoBsmt': 0, 'No': 1, 'Mn':2, 'Av':3, 'Gd':4})\n",
+        "    df['BsmtFinSF1_squared'] = df.BsmtFinSF1 ** 2\n",
+        "    \n",
+        "    \n",
+        "    # Proximity to various conditions\n",
+        "    df['pos1_feedr_art'] = ((df.Condition1 == 'Feedr') | (df.Condition1 == 'Artery'))\n",
+        "    df['pos2_feedr_art'] = ((df.Condition2 == 'Feedr') | (df.Condition2 == 'Artery'))\n",
+        "    df['pos1_pos2_sum1'] = (df.pos1_feedr_art + df.pos2_feedr_art == 1)\n",
+        "    df['pos1_pos2_sum2'] = (df.pos1_feedr_art + df.pos2_feedr_art == 2)\n",
+        "    \n",
+        "    \n",
+        "    # Kitchen Stuff\n",
+        "    df['kitchen_numeric'] = df.KitchenQual.map({'Po': 1, 'Fa':2, 'TA':3, 'Gd':4, 'Ex':5})\n",
+        "    df['kitchen_numeric_squared'] = df.kitchen_numeric ** 2\n",
+        "    \n",
+        "    \n",
+        "    # Home Exterior / Roof\n",
+        "    df['exterior_exc'] = (df.ExterQual == 'Ex')\n",
+        "    df['RoofStyle_Hip'] = (df.RoofStyle == 'Hip')\n",
+        "    df['RoofStyle_Gambrel'] = (df.RoofStyle == 'Gambrel')\n",
+        "    df['RoofMatl_Wd'] = ((df.RoofMatl == 'WdShngl') | (df.RoofMatl == 'WdShake'))\n",
+        "    df['Exterior1st_VinylSd'] = (df.Exterior1st == 'VinylSd')\n",
+        "    df['Exterior1st_MetalSd'] = (df.Exterior1st == 'MetalSd')\n",
+        "    df['Exterior1st_WdSdng'] = ((df.Exterior1st == 'Wd Sdng') | (df.Exterior1st == 'WdShing'))\n",
+        "    df['Exterior1st_HdBoard'] = (df.Exterior1st == 'HdBoard')\n",
+        "    df['Exterior1st_CemntBd'] = (df.Exterior1st == 'CemntBd')\n",
+        "    df['Exterior1st_BrkFace'] = (df.Exterior1st == 'BrkFace')\n",
+        "    df['Exterior1st_AsbShng'] = (df.Exterior1st == 'AsbShng')\n",
+        "\n",
+        "    \n",
+        "    # Fireplaces\n",
+        "    df['no_fireplace'] = (df.Fireplaces == 0)\n",
+        "    df['two_or_more_fireplaces'] = (df.Fireplaces >= 2)\n",
+        "    df.FireplaceQu = df.FireplaceQu.fillna('None')\n",
+        "    df['FireplaceQu_numeric'] = df.FireplaceQu.map({'None': 1, 'Po': 0, 'Fa':1, 'TA':2, 'Gd':3, 'Ex':4})\n",
+        "    df['FireplaceQu_numeric_squared'] = df.FireplaceQu_numeric ** 2\n",
+        "    \n",
+        "    \n",
+        "    # Electrical\n",
+        "    df['electrical_is_brkr'] = (df.Electrical == 'SBrkr')\n",
+        "    df['electrical_is_F'] = (df.Electrical == 'FuseF')\n",
+        "    df['electrical_is_A'] = (df.Electrical == 'FuseA')\n",
+        "    df['electrical_is_P'] = (df.Electrical == 'FuseP')\n",
+        "    \n",
+        "    # Land Shape / Foundation\n",
+        "    df = pd.get_dummies(df, prefix='Foundation_', columns=['Foundation'])\n",
+        "    df['banked_land'] = (df.LandContour == 'Bnk')\n",
+        "    df['HLS_land'] = (df.LandContour == 'HLS_land')\n",
+        "    df['landslope_mod_sev'] = (df.LandSlope != 'Gtl')\n",
+        "    df['land_interaction'] = df.HLS_land + df.landslope_mod_sev\n",
+        "    df['LotShape_Reg'] = (df.LotShape == 'Reg')\n",
+        "    \n",
+        "    #MasVnr\n",
+        "    df['MasVnrType_Stone'] = (df.MasVnrType == 'Stone')\n",
+        "    df['MasVnrType_BrkFace'] = (df.MasVnrType == 'BrkFace')\n",
+        "    df['MasVnrType_BrkCmn'] = (df.MasVnrType == 'BrkCmn')\n",
+        "    df.MasVnrArea = df.MasVnrArea.fillna(0)\n",
+        "    df['MasVnrArea_squared'] = df.MasVnrArea ** 2\n",
+        "    \n",
+        "    # Neighborhood\n",
+        "    df['Neighborhood_Crawfor'] = (df.Neighborhood == 'Crawfor')\n",
+        "    df['Neighborhood_2'] = df.Neighborhood\n",
+        "    df = pd.get_dummies(df, prefix='Neighborhood', columns=['Neighborhood_2'])\n",
+        "    \n",
+        "    #driveway \n",
+        "    \n",
+        "    df['paved_drive_numeric'] = df.PavedDrive.map({'Y': 2, 'P': 1, 'N': 0})\n",
+        "    df['paved_drive_squared'] = df.paved_drive_numeric ** 2\n",
+        "    \n",
+        "    #Fence\n",
+        "    df.Fence = df.Fence.fillna('None')\n",
+        "    df['TotRmsAbvGrd_perGrLivArea'] = df.TotRmsAbvGrd / df.GrLivArea\n",
+        "    df['total_bathrooms'] = (df.BsmtFullBath + df.BsmtHalfBath + df.FullBath + df.HalfBath)\n",
+        "    df['total_bathrooms_squared'] = df.total_bathrooms ** 2\n",
+        "    \n",
+        "    df.Alley = df.Alley.fillna('None')\n",
+        "    df.Alley = pd.factorize(df.Alley)[0]\n",
+        "    return df\n"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "metadata": {
+        "id": "wcS7HPcE2xX2",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "cell_type": "code",
+      "source": [
+        "features = ['LotArea','OverallQual', 'OverallCond', 'GrLivArea','GarageArea', 'FullBath', 'HalfBath', 'fullhalfbath_interaction', 'BedroomAbvGr',\n",
+        "            'sold_pre_2008', 'age_sold','age_sold_squared', 'years_since_remod', 'age_remod_interaction', '1stFlrSF', '2ndFlrSF', 'floor_interaction', 'mszoning_RL', 'mszoning_c',\n",
+        "            'mszoning_RM', 'mszoning_FV', 'good_area', 'bad_area', 'one_fam_home', 'townhouse', 'miscfeature_isnone', 'has_shed', 'new_home', 'attached_garage',\n",
+        "            'detchd_garage', 'lotarea_squared', 'overallqual_squared', 'overallcond_squared', 'is_start_of_school', 'is_spring', 'remodeled?', 'age_remodeled_interaction_good',\n",
+        "            'sq_footage_fsb', 'sqfootage_fsb_squared', 'grlivarea_squared', 'heating_qual_ex', 'heating_qual_pr', 'heating_qual_fa', 'finished_bsmt', 'pos1_feedr_art', 'pos2_feedr_art',\n",
+        "            'pos1_pos2_sum1', 'pos1_pos2_sum2', 'kitchen_numeric_squared', 'garage_cars_squared', 'atypical_function', 'exterior_exc', 'salecond_abnorml', 'no_fireplace', 'lotfrontage_squared',\n",
+        "            'garagearea_squared', 'sq_footage_fsbg', 'banked_land', 'HLS_land', 'salecond_family', 'paved_drive_numeric', 'paved_drive_squared', 'OpenPorchSF', 'WoodDeckSF', 'EnclosedPorch',\n",
+        "            'ScreenPorch', 'garageQual_numeric_squared', 'garage_unf', 'garage_Fin', 'no_central_air', 'Foundation__CBlock', 'Foundation__PConc', 'Foundation__Slab', 'Foundation__Stone', 'Foundation__Wood',\n",
+        "            'RoofStyle_Hip', 'RoofStyle_Gambrel', 'RoofMatl_Wd','TotRmsAbvGrd_squared', 'LowQualFinSF', 'LowQualFinSF_squared', 'Exterior1st_VinylSd', 'Exterior1st_MetalSd', 'Exterior1st_WdSdng', 'MasVnrType_Stone',\n",
+        "            'MasVnrType_BrkCmn', 'street_grvl', 'Neighborhood_Crawfor', 'FireplaceQu_numeric_squared', 'Garage_Added', 'LotShape_Reg', 'TotRmsAbvGrd_perGrLivArea', 'total_bathrooms', 'total_bathrooms_squared']\n"
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "metadata": {
+        "id": "d-lBLR8D5mES",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 52
+        },
+        "outputId": "f382014f-69db-4ea8-9b2a-794fc6539722"
+      },
+      "cell_type": "code",
+      "source": [
+        "df = engineer_me(df)"
+      ],
+      "execution_count": 8,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "/usr/local/lib/python3.6/dist-packages/pandas/core/computation/expressions.py:179: UserWarning: evaluating in Python space because the '+' operator is not supported by numexpr for the bool dtype, use '|' instead\n",
+            "  .format(op=op_str, alt_op=unsupported[op_str]))\n"
+          ],
+          "name": "stderr"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "id": "v0G213dc3aiO",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 34
+        },
+        "outputId": "eaad9c98-ea72-4e7c-f7a2-994b40afe958"
+      },
+      "cell_type": "code",
+      "source": [
+        "from sklearn.linear_model import LinearRegression\n",
+        "from sklearn.ensemble import GradientBoostingRegressor\n",
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from sklearn.linear_model import Ridge\n",
+        "from sklearn.linear_model import Lasso\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error\n",
+        "\n",
+        "X = df[features].values\n",
+        "y = np.log(df['SalePrice'])\n",
+        "\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)\n",
+        "\n",
+        "lr = LinearRegression()\n",
+        "lr.fit(X_train, y_train)\n",
+        "\n",
+        "mse = mean_squared_error(lr.predict(X_test), y_test)\n",
+        "rmse = np.sqrt(mse)\n",
+        "print(rmse)"
+      ],
+      "execution_count": 101,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "0.11071974468278811\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "id": "CHVMfx5m5aYT",
+        "colab_type": "code",
+        "colab": {
+          "base_uri": "https://localhost:8080/",
+          "height": 34
+        },
+        "outputId": "6cc2e946-b678-4b4f-be2c-15971104f1ba"
+      },
+      "cell_type": "code",
+      "source": [
+        "from sklearn.linear_model import LinearRegression\n",
+        "from sklearn.ensemble import GradientBoostingRegressor\n",
+        "from sklearn.ensemble import RandomForestRegressor\n",
+        "from sklearn.linear_model import Ridge\n",
+        "from sklearn.linear_model import Lasso\n",
+        "from sklearn.model_selection import train_test_split\n",
+        "from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error\n",
+        "\n",
+        "X = df[features].values\n",
+        "y = np.log(df['SalePrice'])\n",
+        "\n",
+        "X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=.2)\n",
+        "\n",
+        "lr = Ridge(solver='svd')\n",
+        "lr.fit(X_train, y_train)\n",
+        "\n",
+        "mse = mean_squared_error(lr.predict(X_test), y_test)\n",
+        "rmse = np.sqrt(mse)\n",
+        "print(rmse)"
+      ],
+      "execution_count": 102,
+      "outputs": [
+        {
+          "output_type": "stream",
+          "text": [
+            "0.12135891332320911\n"
+          ],
+          "name": "stdout"
+        }
+      ]
+    },
+    {
+      "metadata": {
+        "id": "xnKsAv2_6Z4R",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "cell_type": "code",
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    },
+    {
+      "metadata": {
+        "id": "t1jd7N6K8SAb",
+        "colab_type": "code",
+        "colab": {}
+      },
+      "cell_type": "code",
+      "source": [
+        ""
+      ],
+      "execution_count": 0,
+      "outputs": []
+    }
+  ]
+}
